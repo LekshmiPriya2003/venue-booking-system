@@ -42,7 +42,8 @@ INSTALLED_APPS = [
     'bookings',
     'owner',
     'rest_framework',
-    'django_filters'
+    'django_filters',
+    'rest_framework_simplejwt',
 
 ]
 REST_FRAMEWORK = {
@@ -54,7 +55,13 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
 }
+AUTH_USER_MODEL = 'accounts.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
