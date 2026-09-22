@@ -12,6 +12,7 @@ class VenueSerializer(serializers.ModelSerializer):
     class Meta:
         model = Venue
         fields = '__all__'
+        read_only_fields = ['owner', 'created_at']
 
 
 class VenueBlackoutDateSerializer(serializers.ModelSerializer):

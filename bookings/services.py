@@ -42,12 +42,29 @@ def _describe_buffer():
 def validate_booking_window(event_date, start_time, end_time):
     """Reject dates in the past and time ranges that don't move forward."""
     errors = {}
-    if event_date < timezone.localdate():
+    now = timezone.localtime()
+    if event_date < now.date():
         errors["event_date"] = "Event date cannot be in the past."
+    elif event_date == now.date() and start_time <= now.time():
+        errors["start_time"] = "Start time has already passed today."
     if end_time <= start_time:
         errors["end_time"] = "End time must be after start time."
     if errors:
         raise DjangoValidationError(errors)
+
+
+def check_duplicate_request(organizer, venue, event_date, start_time, end_time):
+    """Refuse an identical request the organizer already has open."""
+    if Booking.objects.filter(
+        organizer=organizer, venue=venue, event_date=event_date,
+        start_time=start_time, end_time=end_time,
+        status__in=[Booking.Status.PENDING, Booking.Status.CONFIRMED],
+    ).exists():
+        raise DjangoValidationError(
+            {"non_field_errors": [
+                "You already have an active request for this venue, date and time."
+            ]}
+        )
 
 
 def check_venue_active(venue):
@@ -170,6 +187,7 @@ def create_booking(
     """
     validate_booking_window(event_date, start_time, end_time)
     locked_venue = Venue.objects.select_for_update().get(pk=venue.pk)
+    check_duplicate_request(organizer, locked_venue, event_date, start_time, end_time)
     run_conflict_checks(
         locked_venue, event_date, start_time, end_time, expected_headcount
     )

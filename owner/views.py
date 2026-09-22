@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.shortcuts import get_object_or_404
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Count
 from django.utils import timezone
@@ -63,8 +64,11 @@ class BookingActionView(APIView):
 
         # Rejection Logic
         if action == 'reject':
-            booking.status = 'REJECTED'
-            booking.save(update_fields=['status'])
+            if not booking.transition_to(Booking.Status.REJECTED):
+                return Response(
+                    {"error": "This booking is no longer pending."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             self._send_notification(booking, 'rejected')
             return Response({"message": "Booking has been rejected."}, status=status.HTTP_200_OK)
 
@@ -84,13 +88,16 @@ class BookingActionView(APIView):
                     exclude_booking_id=booking.id,
                 )
 
-                booking.status = 'CONFIRMED'
-                booking.save(update_fields=['status'])
+                if not booking.transition_to(Booking.Status.CONFIRMED):
+                    return Response(
+                        {"error": "This booking is no longer pending."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-        except Exception as e:
+        except DjangoValidationError as e:
             return Response(
-                {"error": f"Cannot confirm booking: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Cannot confirm booking.", "details": e.message_dict},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         self._send_notification(booking, 'approved')
@@ -125,7 +132,7 @@ class OwnerDashboardView(APIView):
 
         # Venue utilization aggregation
         utilization = owner_venues.annotate(
-            total_bookings=Count('booking')
+            total_bookings=Count('bookings')
         ).values('id', 'name', 'total_bookings')
 
         formatted_utilization = [
